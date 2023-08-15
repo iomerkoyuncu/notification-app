@@ -1,10 +1,14 @@
+import Home from './pages/Home/pages/Home';
 
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
 function App() {
   return (
-    <div className="App">
-      <h1 className="font-bold">React App</h1>
-    </div>
+    <>
+      <Home />
+      <ToastContainer />
+    </>
   );
 }
 
