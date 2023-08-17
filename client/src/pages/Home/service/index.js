@@ -2,6 +2,17 @@ import axios from 'axios'
 import { appConfig } from '../../../constants/appConfig'
 
 const service = {
+    async getExpiredNotifications() {
+        const endPoint = `/notifications/notification/expired`
+        const result = await axios.get(appConfig.baseUrl + endPoint, {
+            headers: {
+                Accept: 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+        return result
+    },
+
     async getNotifications() {
         const endPoint = `/notifications`
         const result = await axios.get(appConfig.baseUrl + endPoint, {

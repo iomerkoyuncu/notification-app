@@ -55,10 +55,21 @@ const deleteNotification = asyncHandler(async (req, res) => {
     res.json("Notification was deleted")
 })
 
+// @desc  Get all Expired Notifications
+// @route GET /api/notifications/expired
+// @access Public
+
+const getExpiredNotifications = asyncHandler(async (req, res) => {
+    const allExpiredNotifications = await pool.query("SELECT * FROM expired_notifications")
+    res.json(allExpiredNotifications.rows)
+})
+
+
 module.exports = {
     createNotification,
     getNotifications,
     getNotification,
     updateNotification,
-    deleteNotification
+    deleteNotification,
+    getExpiredNotifications
 }

@@ -5,7 +5,8 @@ const {
     getNotification,
     createNotification,
     updateNotification,
-    deleteNotification
+    deleteNotification,
+    getExpiredNotifications
 } = require("../controllers/notificationController")
 
 router.get("/", getNotifications)
@@ -13,5 +14,8 @@ router.post("/", createNotification)
 router.get("/:id", getNotification)
 router.put("/:id", updateNotification)
 router.delete("/:id", deleteNotification)
+
+router.get("/notification/expired", getExpiredNotifications)
+
 
 module.exports = router
