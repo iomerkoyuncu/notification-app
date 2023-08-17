@@ -15,8 +15,6 @@ const io = require("socket.io")(server, {
   console.log("Socket.io listening on port 3002")
 })
 
-
-
 // Check for expired notifications every minute
 const checkExpiredNotifications = async (socket) => {
   try {
@@ -55,10 +53,6 @@ app.use(express.urlencoded({ extended: false }))
 app.get("/", (req, res) => {
   res.status(200).json({ message: "Welcome to the Notification API" })
 })
-
-app.get('/socket.io/socket.io.js', (req, res) => {
-  res.sendFile(__dirname + '/node_modules/socket.io/client-dist/socket.io.js');
-});
 
 //Routes
 app.use("/api/notifications", require("./routes/notificationRoutes"))
