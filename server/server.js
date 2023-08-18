@@ -1,48 +1,119 @@
-const express = require("express")
+const express = require('express')
 const app = express()
-const cors = require("cors")
-const http = require("http")
-const dayjs = require("dayjs")
-const pool = require("./config/db")
-
+const cors = require('cors')
+const http = require('http')
+const dayjs = require('dayjs')
+const pool = require('./config/db')
 const server = http.createServer(app)
+const { ToadScheduler, SimpleIntervalJob, Task } = require('toad-scheduler')
+const scheduler = new ToadScheduler()
 
-const io = require("socket.io")(server, {
+const io = require('socket.io')(server, {
   cors: {
-    origin: "*",
+    origin: '*',
   },
 }).listen(3002, () => {
-  console.log("Socket.io listening on port 3002")
+  console.log('Socket.io listening on port 3002')
 })
 
-// Check for expired notifications every minute
-const checkExpiredNotifications = async (socket) => {
+let notificationStack = [] // Maintain a stack of notifications
+let checkForNotifications = true
+const checkForSeconds = 5
+
+// Function to handle expired notifications
+const handleExpiredNotifications = async () => {
   try {
-    const currentTimestamp = dayjs().format("YYYY-MM-DD HH:mm:ss");
-    const expiredNotifications = await pool.query("SELECT * FROM notifications WHERE expiry_date <= $1", [currentTimestamp]);
+    if (notificationStack.length === 0) {
+      console.log('No expired notifications in the stack')
+      return
+    }
 
-    await Promise.all(expiredNotifications.rows.map(async (notification) => {
-      try {
-        await io.emit("notification", notification);
+    // Get the latest notification from the stack
+    const notification = notificationStack.pop()
 
-        // Remove the notification from the database
-        await pool.query("DELETE FROM notifications WHERE notification_id = $1", [notification.notification_id]);
-        // Insert the notification into the expired_notifications table
-        await pool.query("INSERT INTO expired_notifications (message, expiry_date) VALUES ($1, $2)", [notification.message, notification.expiry_date]);
+    // Emit the notification via socket.io
+    await io.emit('notification', notification)
 
-      } catch (error) {
-        console.error("Error handling notification:", error);
-      }
-    }));
+    // Remove the notification from the database
+    await pool.query('DELETE FROM notifications WHERE notification_id = $1', [
+      notification.notification_id,
+    ])
+
+    // Insert the notification into the expired_notifications table
+    await pool.query(
+      'INSERT INTO expired_notifications (message, expiry_date) VALUES ($1, $2)',
+      [notification.message, notification.expiry_date]
+    )
+
+    console.log('Expired notification processed:', notification)
+
+    // Continue processing any remaining notifications
+    if (notificationStack.length > 0) {
+      handleExpiredNotifications()
+    } else {
+      scheduler.addSimpleIntervalJob(job)
+    }
   } catch (error) {
-    console.error("Error checking expired notifications:", error);
+    console.error('Error handling notification:', error)
   }
-};
+}
 
-// Run the function every minute (adjust the interval as needed)
-setInterval(checkExpiredNotifications, 1000);
+const task = new Task('Check db for notification', async () => {
+  try {
+    const notifications = await pool.query(
+      'SELECT * FROM notifications WHERE expiry_date >= $1',
+      [dayjs().format('YYYY-MM-DD HH:mm:ss')]
+    )
 
-const errorHandler = require("./middlewares/errorMiddleware")
+    if (notifications.rows.length > 0) {
+      checkForNotifications = false
+
+      const nextNotification = await pool.query(
+        'SELECT * FROM notifications WHERE expiry_date >= $1 ORDER BY expiry_date DESC LIMIT 1',
+        [dayjs().format('YYYY-MM-DD HH:mm:ss')]
+      )
+
+      console.log('Found notifications to process')
+      scheduler.stop()
+      console.log('Scheduler stopped!')
+
+      const nextNotificationExpiryDate = nextNotification.rows[0].expiry_date
+      const nextNotificationExpiryDateUnix = dayjs(
+        nextNotificationExpiryDate
+      ).unix()
+      const currentTimeUnix = dayjs().unix()
+      const timeDifference = nextNotificationExpiryDateUnix - currentTimeUnix
+
+      console.log(
+        'Next notification will be processed in',
+        timeDifference,
+        'seconds'
+      )
+
+      // Push the new notifications onto the stack
+      notificationStack.push(...notifications.rows)
+
+      setTimeout(() => {
+        console.log('Found Notification!')
+
+        handleExpiredNotifications(nextNotification.rows[0])
+      }, timeDifference * 1000)
+    } else {
+      checkForNotifications = true
+      console.log('No expired notifications to process')
+    }
+  } catch (error) {
+    console.error('Error checking for notifications:', error)
+  }
+})
+
+const job = new SimpleIntervalJob({ seconds: checkForSeconds }, task)
+
+if (checkForNotifications) {
+  scheduler.addSimpleIntervalJob(job)
+}
+
+const errorHandler = require('./middlewares/errorMiddleware')
 
 const PORT = process.env.PORT || 3001
 
@@ -50,12 +121,12 @@ app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 
-app.get("/", (req, res) => {
-  res.status(200).json({ message: "Welcome to the Notification API" })
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'Welcome to the Notification API' })
 })
 
 //Routes
-app.use("/api/notifications", require("./routes/notificationRoutes"))
+app.use('/api/notifications', require('./routes/notificationRoutes'))
 
 app.use(errorHandler)
 
